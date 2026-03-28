@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Monitor, Key, Link as LinkIcon, ShieldCheck, Settings } from "lucide-react";
+import { Monitor, Key, Link as LinkIcon, ShieldCheck, Settings, RefreshCw, Server } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { enable, isEnabled, disable } from '@tauri-apps/plugin-autostart';
@@ -7,28 +7,38 @@ import { writeText, readText } from '@tauri-apps/plugin-clipboard-manager';
 import SimplePeer from "simple-peer";
 import "./App.css";
 
-// 信令服务器地址 (请替换为您的实际服务器地址)
-const SIGNALING_SERVER_URL = "ws://127.0.0.1:3000/ws";
+interface ServerConfig {
+  url: string;
+  priority: number;
+  enabled: boolean;
+}
+
+interface AppConfig {
+  version: string;
+  signaling_servers: ServerConfig[];
+  config_center_url: string | null;
+  last_updated: string | null;
+}
 
 function App() {
-  // 本机信息 (作为被控端)
   const [localCode, setLocalCode] = useState("正在获取...");
   const [localPassword, setLocalPassword] = useState("正在获取...");
   const [, setClientId] = useState("");
   
-  // 远程信息 (作为控制端)
   const [remoteCode, setRemoteCode] = useState("");
   const [remotePassword, setRemotePassword] = useState("");
   
-  // 状态
   const [status, setStatus] = useState("未连接");
   const [isCapturing, setIsCapturing] = useState(false);
   const [, setScreenFrame] = useState<string | null>(null);
-  const [isRemoteView, setIsRemoteView] = useState(false); // 是否正在查看远程画面
+  const [isRemoteView, setIsRemoteView] = useState(false);
   const [autoStart, setAutoStart] = useState(false);
   const lastClipboardText = useRef<string>("");
+  
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [currentServerIndex, setCurrentServerIndex] = useState(0);
+  const [availableServers, setAvailableServers] = useState<string[]>([]);
 
-  // 检查开机自启状态
   useEffect(() => {
     const checkAutoStart = async () => {
       try {
@@ -39,7 +49,37 @@ function App() {
       }
     };
     checkAutoStart();
+    
+    loadConfig();
   }, []);
+
+  const loadConfig = async () => {
+    try {
+      const cfg = await invoke<AppConfig>("get_config");
+      setConfig(cfg);
+      const servers = await invoke<string[]>("get_servers");
+      setAvailableServers(servers);
+      console.log("Loaded config:", cfg);
+      console.log("Available servers:", servers);
+    } catch (e) {
+      console.error("Failed to load config:", e);
+    }
+  };
+
+  const refreshConfig = async () => {
+    try {
+      setStatus("正在刷新配置...");
+      const cfg = await invoke<AppConfig>("refresh_config");
+      setConfig(cfg);
+      const servers = await invoke<string[]>("get_servers");
+      setAvailableServers(servers);
+      setStatus("配置已更新");
+      console.log("Refreshed config:", cfg);
+    } catch (e) {
+      console.error("Failed to refresh config:", e);
+      setStatus("配置刷新失败，使用本地配置");
+    }
+  };
 
   const toggleAutoStart = async () => {
     try {
@@ -56,12 +96,11 @@ function App() {
     }
   };
 
-  // 引用
   const wsRef = useRef<WebSocket | null>(null);
   const peerRef = useRef<SimplePeer.Instance | null>(null);
   const remoteVideoRef = useRef<HTMLImageElement>(null);
+  const reconnectTimeoutRef = useRef<number | null>(null);
 
-  // 监听本地剪贴板变化并发送给对方
   useEffect(() => {
     if (status !== "P2P 连接已建立") return;
 
@@ -79,22 +118,74 @@ function App() {
           }
         }
       } catch (e) {
-        // 忽略读取剪贴板失败的错误 (可能是非文本内容)
       }
-    }, 1000); // 每秒检查一次剪贴板
+    }, 1000);
 
     return () => clearInterval(interval);
   }, [status]);
 
-  // 初始化 WebSocket 连接
-  useEffect(() => {
-    const ws = new WebSocket(SIGNALING_SERVER_URL);
+  const connectToServer = (serverUrl: string): Promise<WebSocket> => {
+    return new Promise((resolve, reject) => {
+      const ws = new WebSocket(serverUrl);
+      const timeout = setTimeout(() => {
+        ws.close();
+        reject(new Error("Connection timeout"));
+      }, 5000);
+
+      ws.onopen = () => {
+        clearTimeout(timeout);
+        resolve(ws);
+      };
+
+      ws.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error("Connection failed"));
+      };
+    });
+  };
+
+  const connectWithFailover = async (): Promise<WebSocket | null> => {
+    const servers = availableServers.length > 0 ? availableServers : ["ws://127.0.0.1:3000/ws"];
+    
+    for (let i = currentServerIndex; i < servers.length; i++) {
+      const serverUrl = servers[i];
+      try {
+        setStatus(`正在连接服务器 ${i + 1}/${servers.length}...`);
+        console.log(`Trying server: ${serverUrl}`);
+        const ws = await connectToServer(serverUrl);
+        setCurrentServerIndex(i);
+        console.log(`Connected to server: ${serverUrl}`);
+        return ws;
+      } catch (e) {
+        console.error(`Failed to connect to ${serverUrl}:`, e);
+        if (i < servers.length - 1) {
+          setStatus(`服务器 ${i + 1} 不可用，尝试下一个...`);
+        }
+      }
+    }
+    
+    setStatus("所有服务器均不可用");
+    return null;
+  };
+
+  const initWebSocket = async () => {
+    const ws = await connectWithFailover();
+    if (!ws) {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        console.log("Retrying connection...");
+        initWebSocket();
+      }, 5000);
+      return;
+    }
+
     wsRef.current = ws;
 
     ws.onopen = () => {
       console.log("Connected to signaling server");
       setStatus("已连接信令服务器");
-      // 注册为被控端
       ws.send(JSON.stringify({ type: "RegisterHost" }));
     };
 
@@ -113,7 +204,6 @@ function App() {
         case "ConnectResult":
           if (msg.success) {
             setStatus("连接成功，正在建立 P2P...");
-            // 作为控制端，发起 WebRTC Offer
             initWebRTC(true);
           } else {
             setStatus(`连接失败: ${msg.message}`);
@@ -123,13 +213,11 @@ function App() {
 
         case "PeerConnected":
           setStatus("有设备连入，正在建立 P2P...");
-          // 作为被控端，等待 WebRTC Offer
           initWebRTC(false);
           break;
 
         case "Sdp":
         case "IceCandidate":
-          // 将信令转发给 SimplePeer
           if (peerRef.current) {
             peerRef.current.signal(msg);
           }
@@ -145,22 +233,39 @@ function App() {
     };
 
     ws.onclose = () => {
-      setStatus("信令服务器已断开");
+      setStatus("信令服务器已断开，正在重连...");
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      reconnectTimeoutRef.current = window.setTimeout(() => {
+        initWebSocket();
+      }, 3000);
     };
+
+    ws.onerror = () => {
+      console.error("WebSocket error");
+    };
+  };
+
+  useEffect(() => {
+    initWebSocket();
 
     return () => {
-      ws.close();
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
       cleanupConnection();
     };
-  }, []);
+  }, [availableServers]);
 
-  // 监听 Rust 发来的屏幕帧 (作为被控端)
   useEffect(() => {
     const unlisten = listen<string>("screen-frame", (event) => {
       const base64Data = `data:image/jpeg;base64,${event.payload}`;
       setScreenFrame(base64Data);
       
-      // 如果 P2P 连接已建立，通过 DataChannel 发送画面给控制端
       if (peerRef.current && peerRef.current.connected) {
         try {
           peerRef.current.send(JSON.stringify({
@@ -178,9 +283,7 @@ function App() {
     };
   }, []);
 
-  // 初始化 WebRTC (SimplePeer)
   const initWebRTC = (initiator: boolean) => {
-    // 注意：在实际生产环境中，需要配置真实的 STUN/TURN 服务器
     const peer = new SimplePeer({
       initiator,
       trickle: true,
@@ -193,7 +296,6 @@ function App() {
     });
 
     peer.on("signal", (data: any) => {
-      // 将本地生成的 SDP/ICE 发送给信令服务器
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         if (data.type === "offer" || data.type === "answer") {
           wsRef.current.send(JSON.stringify({
@@ -217,7 +319,6 @@ function App() {
       setStatus("P2P 连接已建立");
       
       if (!initiator) {
-        // 如果我是被控端，开始采集屏幕
         try {
           await invoke("start_screen_capture");
           setIsCapturing(true);
@@ -225,24 +326,19 @@ function App() {
           console.error("Failed to start capture:", e);
         }
       } else {
-        // 如果我是控制端，切换到远程视图
         setIsRemoteView(true);
       }
     });
 
     peer.on("data", (data) => {
-      // 接收数据
       try {
         const msg = JSON.parse(data.toString());
         if (msg.type === "frame" && initiator) {
-          // 控制端接收画面
           if (remoteVideoRef.current) {
             remoteVideoRef.current.src = msg.data;
           }
         } else if (msg.type === "input" && !initiator) {
-          // 被控端接收输入指令，传给 Rust 执行
           if (msg.action === "mousemove") {
-            // 将相对坐标转换为绝对坐标 (假设屏幕分辨率为 1920x1080，实际应从 Rust 获取)
             const x = Math.round(msg.x * 1920);
             const y = Math.round(msg.y * 1080);
             invoke("handle_mouse_move", { x, y });
@@ -258,7 +354,6 @@ function App() {
             invoke("handle_key_event", { keyCode: msg.key, isDown: false });
           }
         } else if (msg.type === "clipboard") {
-          // 接收到对方的剪贴板内容，写入本地
           if (msg.text && msg.text !== lastClipboardText.current) {
             lastClipboardText.current = msg.text;
             writeText(msg.text).catch(e => console.error("Failed to write clipboard:", e));
@@ -318,7 +413,6 @@ function App() {
     }
   };
 
-  // 渲染远程控制视图
   if (isRemoteView) {
     return (
       <div className="w-screen h-screen bg-black flex flex-col">
@@ -339,7 +433,6 @@ function App() {
           onMouseMove={(e) => {
             if (!peerRef.current || !peerRef.current.connected) return;
             const rect = e.currentTarget.getBoundingClientRect();
-            // 计算相对坐标 (0.0 - 1.0)
             const x = (e.clientX - rect.left) / rect.width;
             const y = (e.clientY - rect.top) / rect.height;
             peerRef.current.send(JSON.stringify({ type: "input", action: "mousemove", x, y }));
@@ -356,12 +449,11 @@ function App() {
           }}
           onWheel={(e) => {
             if (!peerRef.current || !peerRef.current.connected) return;
-            // 简单的滚轮方向判断
             const deltaY = e.deltaY > 0 ? -1 : 1;
             peerRef.current.send(JSON.stringify({ type: "input", action: "scroll", x: 0, y: deltaY }));
           }}
           onContextMenu={(e) => e.preventDefault()}
-          tabIndex={0} // 使 div 可以接收键盘事件
+          tabIndex={0}
           onKeyDown={(e) => {
             if (!peerRef.current || !peerRef.current.connected) return;
             e.preventDefault();
@@ -373,7 +465,6 @@ function App() {
             peerRef.current.send(JSON.stringify({ type: "input", action: "keyup", key: e.key }));
           }}
         >
-          {/* 远程画面渲染区域 */}
           <img 
             ref={remoteVideoRef}
             className="max-w-full max-h-full object-contain pointer-events-none"
@@ -388,7 +479,6 @@ function App() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-6 flex flex-col items-center justify-center">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8">
         
-        {/* 左侧：本机信息 */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
@@ -453,7 +543,6 @@ function App() {
           </div>
         </div>
 
-        {/* 右侧：控制远程设备 */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 border border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg text-purple-600 dark:text-purple-400">
@@ -505,6 +594,22 @@ function App() {
               {status.includes("正在") ? "连接中..." : "连接"}
             </button>
           </div>
+        </div>
+      </div>
+      
+      <div className="mt-6 max-w-4xl w-full bg-white dark:bg-gray-800 rounded-xl shadow p-4 border border-gray-100 dark:border-gray-700">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+            <Server size={16} />
+            <span>服务器: {availableServers.length > 0 ? availableServers[currentServerIndex] : '默认服务器'}</span>
+          </div>
+          <button
+            onClick={refreshConfig}
+            className="flex items-center gap-1 text-sm text-blue-500 hover:text-blue-600"
+          >
+            <RefreshCw size={14} />
+            刷新配置
+          </button>
         </div>
       </div>
     </div>
