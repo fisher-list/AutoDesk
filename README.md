@@ -54,15 +54,51 @@ npm install
 npm run tauri dev
 ```
 
-### 3. 编译打包 (生成可执行文件)
+## 编译打包 (生成可执行文件)
 
-如果您想生成 Windows 的 `.exe` 或 macOS 的 `.app` / `.dmg` 安装包：
+### Windows 构建
+
+#### 方法一：使用 CI/CD 自动构建 (推荐)
+
+1. 在 GitHub 仓库中创建 Release 或推送 tag：
+   ```bash
+   git tag v0.1.0
+   git push origin v0.1.0
+   ```
+
+2. GitHub Actions 将自动构建并上传安装包到 Release
+
+#### 方法二：本地构建
+
+1. 双击运行 `build_windows.bat` 或在命令提示符中执行：
+   ```bash
+   build_windows.bat
+   ```
+
+2. 构建完成后，安装包位置：
+   - NSIS 安装包: `client\src-tauri\target\release\bundle\nsis\AutoDesk_0.1.0_x64-setup.exe`
+   - MSI 安装包: `client\src-tauri\target\release\bundle\msi\AutoDesk_0.1.0_x64_en-US.msi`
+
+### macOS 构建
 
 ```bash
 cd client
 npm run tauri build
 ```
-编译完成后，安装包会生成在 `client/src-tauri/target/release/bundle/` 目录下。
+
+安装包位置: `client/src-tauri/target/release/bundle/macos/AutoDesk.app`
+
+---
+
+## 下载安装
+
+### 最新版本
+
+| 平台 | 下载链接 |
+|------|----------|
+| Windows x64 | [AutoDesk_0.1.0_x64-setup.exe](链接将在这里显示) |
+| Windows MSI | [AutoDesk_0.1.0_x64_en-US.msi](链接将在这里显示) |
+| macOS | [AutoDesk_macOS.zip](链接将在这里显示) |
 
 ## 注意事项
 

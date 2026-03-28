@@ -1,0 +1,91 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          cd client
+          npm install
+          cargo install tauri-cli --force
+
+      - name: Build Tauri app
+        run: |
+          cd client
+          npm run tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
+      - name: Upload Windows Installer
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ inputs.upload_url || github.event.release.upload_url }}
+          asset_path: client/src-tauri/target/release/bundle/nsis/AutoDesk_0.1.0_x64-setup.exe
+          asset_name: AutoDesk_0.1.0_x64-setup.exe
+          asset_content_type: application/octet-stream
+
+      - name: Upload MSI Installer
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ inputs.upload_url || github.event.release.upload_url }}
+          asset_path: client/src-tauri/target/release/bundle/msi/AutoDesk_0.1.0_x64_en-US.msi
+          asset_name: AutoDesk_0.1.0_x64_en-US.msi
+          asset_content_type: application/x-installer
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: |
+          cd client
+          npm install
+          cargo install tauri-cli --force
+
+      - name: Build Tauri app
+        run: |
+          cd client
+          npm run tauri build
+
+      - name: Create ZIP
+        run: |
+          cd client/src-tauri/target/release/bundle/macos
+          zip -r AutoDesk_macOS.zip AutoDesk.app
+
+      - name: Upload macOS ZIP
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ inputs.upload_url || github.event.release.upload_url }}
+          asset_path: client/src-tauri/target/release/bundle/macos/AutoDesk_macOS.zip
+          asset_name: AutoDesk_macOS.zip
+          asset_content_type: application/zip
