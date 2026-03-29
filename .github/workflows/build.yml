@@ -14,9 +14,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest'
-            args: '--bundles dmg'
-            target: ''
+          - platform: 'macos-13' # Intel Mac
+            args: '--bundles dmg --target x86_64-apple-darwin'
+            target: 'x86_64-apple-darwin'
+          - platform: 'macos-latest' # ARM Mac (M1/M2/M3)
+            args: '--bundles dmg --target aarch64-apple-darwin'
+            target: 'aarch64-apple-darwin'
           - platform: 'windows-latest'
             args: '--bundles nsis'
             target: 'x86_64-pc-windows-msvc'
