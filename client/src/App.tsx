@@ -35,7 +35,7 @@ function App() {
   const [autoStart, setAutoStart] = useState(false);
   const lastClipboardText = useRef<string>("");
   
-  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [_config, setConfig] = useState<AppConfig | null>(null);
   const [currentServerIndex, setCurrentServerIndex] = useState(0);
   const [availableServers, setAvailableServers] = useState<string[]>([]);
 

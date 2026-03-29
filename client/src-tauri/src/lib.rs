@@ -3,7 +3,7 @@ mod input_controller;
 mod config_manager;
 
 use std::sync::Arc;
-use tauri::{State, Emitter};
+use tauri::{State, Emitter, Manager};
 use screen_capture::ScreenCapture;
 use input_controller::InputController;
 use config_manager::ConfigManager;
