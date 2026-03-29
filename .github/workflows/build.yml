@@ -15,10 +15,10 @@ jobs:
       matrix:
         include:
           - platform: 'macos-13' # Intel Mac
-            args: '--bundles dmg --target x86_64-apple-darwin'
+            args: '--bundles dmg'
             target: 'x86_64-apple-darwin'
           - platform: 'macos-latest' # ARM Mac (M1/M2/M3)
-            args: '--bundles dmg --target aarch64-apple-darwin'
+            args: '--bundles dmg'
             target: 'aarch64-apple-darwin'
           - platform: 'windows-latest'
             args: '--bundles nsis'
