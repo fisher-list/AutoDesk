@@ -34,7 +34,7 @@ impl ScreenCapture {
         let is_capturing_clone = self.is_capturing.clone();
 
         // 启动一个后台任务进行循环采集
-        tokio::spawn(async move {
+        std::thread::spawn(move || {
             // 获取主显示器
             let monitors = Monitor::all().unwrap_or_default();
             let primary_monitor = monitors.into_iter().find(|m| m.is_primary().unwrap_or(false));
@@ -43,8 +43,8 @@ impl ScreenCapture {
                 println!("Start capturing monitor: {}", monitor.name().unwrap_or_else(|_| "Unknown".to_string()));
                 
                 loop {
-                    let capturing = *is_capturing_clone.lock().await;
-                    if !capturing {
+                    let capturing = futures::executor::block_on(is_capturing_clone.lock());
+                    if !*capturing {
                         println!("Stop capturing monitor");
                         break;
                     }
@@ -66,7 +66,7 @@ impl ScreenCapture {
                     }
 
                     // 控制帧率，例如 30 FPS (约 33ms 一帧)
-                    tokio::time::sleep(Duration::from_millis(33)).await;
+                    std::thread::sleep(Duration::from_millis(33));
                 }
             } else {
                 eprintln!("No primary monitor found");
