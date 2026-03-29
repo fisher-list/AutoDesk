@@ -54,9 +54,9 @@ jobs:
         with:
           name: AutoDesk-${{ matrix.platform }}-${{ github.run_id }}
           path: |
-            client/src-tauri/target/release/bundle/**/*.exe
-            client/src-tauri/target/release/bundle/**/*.msi
-            client/src-tauri/target/release/bundle/**/*.dmg
+            client/src-tauri/target/release/bundle/nsis/*.exe
+            client/src-tauri/target/release/bundle/msi/*.msi
+            client/src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
 
   release:
