@@ -49,7 +49,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: AutoDesk-${{ matrix.platform }}
+          name: AutoDesk-${{ matrix.platform }}-${{ github.run_id }}
           path: |
             client/src-tauri/target/release/bundle/**/*.exe
             client/src-tauri/target/release/bundle/**/*.msi
@@ -65,13 +65,15 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: 'AutoDesk-*'
           path: artifacts
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         run: ls -R artifacts
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: artifacts/**/*.exe
           files: artifacts/**/*.msi
