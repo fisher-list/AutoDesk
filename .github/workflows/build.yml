@@ -15,7 +15,7 @@ jobs:
       matrix:
         include:
           - platform: 'macos-latest'
-            args: '--bundles app'
+            args: '--bundles dmg'
             target: ''
           - platform: 'windows-latest'
             args: '--bundles nsis'
@@ -53,7 +53,7 @@ jobs:
           path: |
             client/src-tauri/target/release/bundle/**/*.exe
             client/src-tauri/target/release/bundle/**/*.msi
-            client/src-tauri/target/release/bundle/**/*.app
+            client/src-tauri/target/release/bundle/**/*.dmg
           if-no-files-found: error
 
   release:
@@ -78,6 +78,6 @@ jobs:
           files: |
             artifacts/**/*.exe
             artifacts/**/*.msi
-            artifacts/**/*.app
+            artifacts/**/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
