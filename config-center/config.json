@@ -2,21 +2,11 @@
   "version": "1.0",
   "signaling_servers": [
     {
-      "url": "wss://signal1.autodesk.example.com/ws",
+      "url": "ws://137.184.82.187:3000/ws",
       "priority": 1,
-      "enabled": true
-    },
-    {
-      "url": "wss://signal2.autodesk.example.com/ws",
-      "priority": 2,
-      "enabled": true
-    },
-    {
-      "url": "wss://signal-backup.autodesk.example.com/ws",
-      "priority": 3,
       "enabled": true
     }
   ],
-  "config_center_url": "https://config.autodesk.example.com/config.json",
-  "last_updated": "2024-01-01T00:00:00Z"
+  "config_center_url": "https://raw.githubusercontent.com/fisher-list/AutoDesk/main/config-center/config.json",
+  "last_updated": "2026-03-29T05:30:00Z"
 }
