@@ -26,13 +26,8 @@ impl Default for AppConfig {
             version: "1.0".to_string(),
             signaling_servers: vec![
                 ServerConfig {
-                    url: "wss://signal.autodesk.example.com/ws".to_string(),
+                    url: "ws://137.184.82.187:3000/ws".to_string(),
                     priority: 1,
-                    enabled: true,
-                },
-                ServerConfig {
-                    url: "wss://signal-backup.autodesk.example.com/ws".to_string(),
-                    priority: 2,
                     enabled: true,
                 },
             ],
