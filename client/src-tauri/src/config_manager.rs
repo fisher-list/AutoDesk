@@ -31,7 +31,7 @@ impl Default for AppConfig {
                     enabled: true,
                 },
             ],
-            config_center_url: Some("https://config.autodesk.example.com/config.json".to_string()),
+            config_center_url: Some("https://raw.githubusercontent.com/fisher-list/AutoDesk/main/config-center/config.json".to_string()),
             last_updated: None,
         }
     }
