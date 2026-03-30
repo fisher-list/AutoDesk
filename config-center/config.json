@@ -2,7 +2,7 @@
   "version": "1.0",
   "signaling_servers": [
     {
-      "url": "ws://137.184.82.187:3000/ws",
+      "url": "ws://autodesk9988.duckdns.org:3000/ws",
       "priority": 1,
       "enabled": true
     }

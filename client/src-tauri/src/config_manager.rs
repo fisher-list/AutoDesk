@@ -26,7 +26,7 @@ impl Default for AppConfig {
             version: "1.0".to_string(),
             signaling_servers: vec![
                 ServerConfig {
-                    url: "ws://137.184.82.187:3000/ws".to_string(),
+                    url: "ws://autodesk9988.duckdns.org:3000/ws".to_string(),
                     priority: 1,
                     enabled: true,
                 },
