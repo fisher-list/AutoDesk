@@ -37,6 +37,7 @@ function App() {
   
   const [_config, setConfig] = useState<AppConfig | null>(null);
   const [currentServerIndex, setCurrentServerIndex] = useState(0);
+  const currentServerIndexRef = useRef(0);
   const [availableServers, setAvailableServers] = useState<string[]>([]);
 
   useEffect(() => {
@@ -52,6 +53,25 @@ function App() {
     
     loadConfig();
   }, []);
+
+  useEffect(() => {
+    if (availableServers.length === 0) {
+      console.log("Waiting for servers to be loaded...");
+      return;
+    }
+    
+    initWebSocket();
+
+    return () => {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      cleanupConnection();
+    };
+  }, [availableServers]);
 
   const loadConfig = async () => {
     try {
@@ -145,30 +165,40 @@ function App() {
   };
 
   const connectWithFailover = async (): Promise<WebSocket | null> => {
-    const servers = availableServers.length > 0 ? availableServers : ["ws://127.0.0.1:3000/ws"];
+    if (availableServers.length === 0) {
+      return null;
+    }
     
-    for (let i = currentServerIndex; i < servers.length; i++) {
-      const serverUrl = servers[i];
+    for (let i = currentServerIndexRef.current; i < availableServers.length; i++) {
+      const serverUrl = availableServers[i];
       try {
-        setStatus(`正在连接服务器 ${i + 1}/${servers.length}...`);
+        setStatus(`正在连接服务器 ${i + 1}/${availableServers.length}...`);
         console.log(`Trying server: ${serverUrl}`);
         const ws = await connectToServer(serverUrl);
+        currentServerIndexRef.current = i;
         setCurrentServerIndex(i);
         console.log(`Connected to server: ${serverUrl}`);
         return ws;
       } catch (e) {
         console.error(`Failed to connect to ${serverUrl}:`, e);
-        if (i < servers.length - 1) {
+        if (i < availableServers.length - 1) {
           setStatus(`服务器 ${i + 1} 不可用，尝试下一个...`);
         }
       }
     }
     
+    // If we reach here, all servers from currentServerIndex to the end failed
+    currentServerIndexRef.current = 0; // Reset for next retry
+    setCurrentServerIndex(0);
     setStatus("所有服务器均不可用");
     return null;
   };
 
   const initWebSocket = async () => {
+    if (availableServers.length === 0) {
+      return;
+    }
+
     const ws = await connectWithFailover();
     if (!ws) {
       if (reconnectTimeoutRef.current) {
@@ -248,13 +278,16 @@ function App() {
   };
 
   useEffect(() => {
-    initWebSocket();
+    if (availableServers.length > 0) {
+      initWebSocket();
+    }
 
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
       if (wsRef.current) {
+        wsRef.current.onclose = null; // Prevent onclose from firing during cleanup
         wsRef.current.close();
       }
       cleanupConnection();
@@ -339,9 +372,7 @@ function App() {
           }
         } else if (msg.type === "input" && !initiator) {
           if (msg.action === "mousemove") {
-            const x = Math.round(msg.x * 1920);
-            const y = Math.round(msg.y * 1080);
-            invoke("handle_mouse_move", { x, y });
+            invoke("handle_mouse_move", { x: msg.x, y: msg.y });
           } else if (msg.action === "mousedown") {
             invoke("handle_mouse_click", { button: msg.button, isDown: true });
           } else if (msg.action === "mouseup") {

@@ -33,7 +33,7 @@ async fn stop_screen_capture(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn handle_mouse_move(state: State<'_, AppState>, x: i32, y: i32) {
+fn handle_mouse_move(state: State<'_, AppState>, x: f64, y: f64) {
     state.input_controller.mouse_move(x, y);
 }
 

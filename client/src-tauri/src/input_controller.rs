@@ -14,10 +14,14 @@ impl InputController {
         }
     }
 
-    /// 移动鼠标到绝对坐标
-    pub fn mouse_move(&self, x: i32, y: i32) {
+    /// 移动鼠标到绝对坐标 (x, y 为 0.0 到 1.0 的比例)
+    pub fn mouse_move(&self, x_ratio: f64, y_ratio: f64) {
         if let Ok(mut enigo) = self.enigo.lock() {
-            let _ = enigo.move_mouse(x, y, Coordinate::Abs);
+            if let Ok((width, height)) = enigo.main_display() {
+                let x = (x_ratio * width as f64).round() as i32;
+                let y = (y_ratio * height as f64).round() as i32;
+                let _ = enigo.move_mouse(x, y, Coordinate::Abs);
+            }
         }
     }
 
