@@ -42,7 +42,7 @@
         "language": "zh-CN"
       },
       "nsis": {
-        "installMode": "currentUser",
+        "installMode": "perMachine",
         "displayLanguageSelector": true
       }
     }
