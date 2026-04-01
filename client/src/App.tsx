@@ -199,6 +199,11 @@ function App() {
       return;
     }
 
+    // If there's already an active connection, don't reconnect
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
     const ws = await connectWithFailover();
     if (!ws) {
       if (reconnectTimeoutRef.current) {
@@ -213,11 +218,10 @@ function App() {
 
     wsRef.current = ws;
 
-    ws.onopen = () => {
-      console.log("Connected to signaling server");
-      setStatus("已连接信令服务器");
-      ws.send(JSON.stringify({ type: "RegisterHost" }));
-    };
+    // We don't need to set onopen here because connectToServer already waited for it to open
+    console.log("Connected to signaling server");
+    setStatus("已连接信令服务器");
+    ws.send(JSON.stringify({ type: "RegisterHost" }));
 
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
